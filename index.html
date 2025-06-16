@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de Calidad del Aire - Paucarpata</title>
+    
+    <!-- Tailwind CSS para un diseño moderno -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js para gráficos históricos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+
+    <!-- Google Fonts para una tipografía más elegante -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        /* Usamos la fuente Inter que acabamos de importar */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+        }
+        /* Estilo para la animación de carga */
+        .loader {
+            border-top-color: #3498db;
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+        }
+
+        @-webkit-keyframes spin {
+            0% { -webkit-transform: rotate(0deg); }
+            100% { -webkit-transform: rotate(360deg); }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+
+        <!-- Encabezado -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-extrabold text-slate-900">Monitor de Calidad del Aire</h1>
+            <p class="text-lg text-slate-600 mt-2">Paucarpata, Arequipa - Dispositivo: <span id="deviceId" class="font-semibold">PAUCARPATA-001</span></p>
+        </header>
+
+        <main>
+            <!-- Tarjeta Principal de Estado -->
+            <div id="status-card" class="bg-white rounded-2xl shadow-lg p-6 md:p-8 mb-8 text-center transition-all duration-500">
+                <p class="text-sm font-medium text-slate-500 uppercase tracking-wider">Calidad del Aire Actual</p>
+                <div id="gas-level" class="text-7xl md:text-8xl font-extrabold my-4">---</div>
+                <div id="air-quality-text" class="text-2xl font-bold uppercase tracking-widest">Cargando...</div>
+                <p class="text-slate-500 mt-4">Última actualización: <span id="last-updated" class="font-semibold">Nunca</span></p>
+            </div>
+            
+            <!-- Contenedor para el gráfico y la tabla -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                <!-- Gráfico Histórico -->
+                <div class="bg-white rounded-2xl shadow-lg p-6">
+                    <h2 class="text-xl font-bold mb-4 text-slate-900">Historial de Contaminación</h2>
+                    <div id="chart-container" class="relative h-64">
+                         <div id="loader" class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-32 w-32 absolute top-1/2 left-1/2 -mt-16 -ml-16"></div>
+                        <canvas id="airQualityChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Tabla de Últimas Mediciones -->
+                <div class="bg-white rounded-2xl shadow-lg p-6">
+                    <h2 class="text-xl font-bold mb-4 text-slate-900">Últimas Mediciones</h2>
+                    <div class="overflow-auto max-h-72">
+                        <table class="w-full text-left">
+                            <thead class="sticky top-0 bg-slate-50">
+                                <tr>
+                                    <th class="p-3 text-sm font-semibold text-slate-600">Nivel de Gas</th>
+                                    <th class="p-3 text-sm font-semibold text-slate-600">Fecha y Hora</th>
+                                </tr>
+                            </thead>
+                            <tbody id="measurements-table">
+                                <!-- Las filas se insertarán aquí con JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+        
+        <!-- Pie de página -->
+        <footer class="text-center mt-12 text-slate-500">
+            <p>Proyecto de Seminario Final - 2025</p>
+        </footer>
+
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN ---
+        // La URL de tu API para obtener los datos
+        const API_URL = 'https://api-calidad-aire.onrender.com/mediciones';
+        // Intervalo de actualización en milisegundos (ej. 30 segundos)
+        const REFRESH_INTERVAL = 30000; 
+
+        // --- REFERENCIAS A ELEMENTOS DEL HTML ---
+        const statusCard = document.getElementById('status-card');
+        const gasLevelEl = document.getElementById('gas-level');
+        const airQualityTextEl = document.getElementById('air-quality-text');
+        const lastUpdatedEl = document.getElementById('last-updated');
+        const tableBody = document.getElementById('measurements-table');
+        const chartLoader = document.getElementById('loader');
+        const chartContainer = document.getElementById('chart-container');
+        let airQualityChart; // Variable para guardar la instancia del gráfico
+
+        /**
+         * Función principal que obtiene los datos de la API
+         */
+        async function fetchData() {
+            console.log("Obteniendo datos de la API...");
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) {
+                    throw new Error(`Error en la API: ${response.statusText}`);
+                }
+                const data = await response.json();
+                
+                // Si la API no devuelve datos, no hacemos nada.
+                if (data.length === 0) {
+                    console.log("No se recibieron datos.");
+                    return;
+                }
+
+                // Procesamos y actualizamos la interfaz con los nuevos datos
+                updateUI(data);
+
+            } catch (error) {
+                console.error("Error al obtener los datos:", error);
+                airQualityTextEl.textContent = "Error de Conexión";
+                statusCard.className = 'bg-slate-300 rounded-2xl shadow-lg p-6 md:p-8 mb-8 text-center transition-all duration-500';
+            }
+        }
+
+        /**
+         * Actualiza toda la interfaz de usuario con los datos recibidos
+         * @param {Array} data - El array de mediciones recibido de la API
+         */
+        function updateUI(data) {
+            // La API devuelve los datos del más reciente al más antiguo.
+            // El dato más reciente es el primero del array.
+            const latestMeasurement = data[0];
+
+            updateStatusCard(latestMeasurement.gas_level);
+            updateTable(data);
+            updateChart(data);
+
+            // Actualizamos la hora de la última actualización
+            lastUpdatedEl.textContent = new Date().toLocaleTimeString('es-PE');
+            if (latestMeasurement.deviceId) {
+                 document.getElementById('deviceId').textContent = latestMeasurement.deviceId;
+            }
+        }
+        
+        /**
+         * Actualiza la tarjeta principal de estado con el nivel de gas y el color correspondiente.
+         * @param {number} gasLevel - El último nivel de gas medido.
+         */
+        function updateStatusCard(gasLevel) {
+            gasLevelEl.textContent = gasLevel;
+
+            let quality = '';
+            let colorClass = '';
+
+            // Definimos los umbrales para la calidad del aire
+            if (gasLevel < 400) {
+                quality = 'BUENA';
+                colorClass = 'bg-green-100 text-green-800';
+            } else if (gasLevel < 700) {
+                quality = 'MODERADA';
+                colorClass = 'bg-yellow-100 text-yellow-800';
+            } else {
+                quality = 'MALA';
+                colorClass = 'bg-red-100 text-red-800';
+            }
+
+            airQualityTextEl.textContent = quality;
+            // Aplicamos la clase de color a la tarjeta completa
+            statusCard.className = `${colorClass} rounded-2xl shadow-lg p-6 md:p-8 mb-8 text-center transition-all duration-500`;
+        }
+
+        /**
+         * Rellena la tabla con las últimas mediciones.
+         * @param {Array} data - El array completo de mediciones.
+         */
+        function updateTable(data) {
+            // Limpiamos la tabla antes de rellenarla
+            tableBody.innerHTML = '';
+            
+            // Tomamos solo las últimas 15 mediciones para no saturar la tabla
+            const recentData = data.slice(0, 15);
+
+            recentData.forEach(measurement => {
+                const row = document.createElement('tr');
+                row.className = 'border-b border-slate-200 hover:bg-slate-50';
+
+                const date = new Date(measurement.timestamp);
+                const formattedDate = date.toLocaleString('es-PE', { 
+                    day: '2-digit', 
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+
+                row.innerHTML = `
+                    <td class="p-3 font-semibold">${measurement.gas_level}</td>
+                    <td class="p-3 text-slate-500">${formattedDate}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        /**
+         * Dibuja o actualiza el gráfico con los datos históricos.
+         * @param {Array} data - El array completo de mediciones.
+         */
+        function updateChart(data) {
+            chartLoader.style.display = 'none';
+            chartContainer.style.height = 'auto';
+            
+            // Para el gráfico, necesitamos los datos en orden cronológico (del más antiguo al más reciente)
+            const reversedData = data.slice().reverse();
+
+            const labels = reversedData.map(d => new Date(d.timestamp));
+            const values = reversedData.map(d => d.gas_level);
+            
+            const chartData = {
+                labels: labels,
+                datasets: [{
+                    label: 'Nivel de Gas',
+                    data: values,
+                    borderColor: '#3b82f6', // Un color azul
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.4 // Esto suaviza las curvas
+                }]
+            };
+
+            if (airQualityChart) {
+                // Si el gráfico ya existe, solo actualizamos los datos
+                airQualityChart.data = chartData;
+                airQualityChart.update();
+            } else {
+                // Si es la primera vez, creamos el gráfico
+                const ctx = document.getElementById('airQualityChart').getContext('2d');
+                airQualityChart = new Chart(ctx, {
+                    type: 'line',
+                    data: chartData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: {
+                                    unit: 'minute',
+                                    tooltipFormat: 'PPpp', // Formato para el tooltip
+                                    displayFormats: {
+                                        minute: 'h:mm a' // Formato para el eje X
+                                    }
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Hora'
+                                }
+                            },
+                            y: {
+                                beginAtZero: false,
+                                title: {
+                                    display: true,
+                                    text: 'Nivel de Gas'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        
+        // --- INICIO DE LA APLICACIÓN ---
+        // Llamamos a la función por primera vez cuando la página carga
+        fetchData();
+
+        // Configuramos la actualización automática cada cierto intervalo
+        setInterval(fetchData, REFRESH_INTERVAL);
+
+    </script>
+
+</body>
+</html>
