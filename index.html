@@ -5,54 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monitor de Calidad del Aire - Paucarpata</title>
     
-    <!-- Tailwind CSS para un diseño moderno -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Chart.js para gráficos históricos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 
-    <!-- Google Fonts para una tipografía más elegante -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+    
+    <!-- ¡NUEVO! Añadimos un manifest para la PWA -->
+    <link rel="manifest" href="/manifest.json">
 
     <style>
-        /* Usamos la fuente Inter que acabamos de importar */
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f0f4f8;
-        }
-        /* Estilo para la animación de carga */
-        .loader {
-            border-top-color: #3498db;
-            -webkit-animation: spin 1s linear infinite;
-            animation: spin 1s linear infinite;
-        }
-
-        @-webkit-keyframes spin {
-            0% { -webkit-transform: rotate(0deg); }
-            100% { -webkit-transform: rotate(360deg); }
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #f0f4f8; }
+        .loader { border-top-color: #3498db; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800">
 
     <div class="container mx-auto p-4 md:p-8 max-w-4xl">
 
-        <!-- Encabezado -->
         <header class="text-center mb-8">
             <h1 class="text-4xl md:text-5xl font-extrabold text-slate-900">Monitor de Calidad del Aire</h1>
             <p class="text-lg text-slate-600 mt-2">Paucarpata, Arequipa - Dispositivo: <span id="deviceId" class="font-semibold">PAUCARPATA-001</span></p>
         </header>
 
         <main>
-            <!-- Tarjeta Principal de Estado -->
+            <div class="flex justify-center mb-4">
+                <button id="enable-notifications-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all hidden">
+                    Activar Notificaciones Push
+                </button>
+            </div>
+
             <div id="status-card" class="bg-white rounded-2xl shadow-lg p-6 md:p-8 mb-8 text-center transition-all duration-500">
                 <p class="text-sm font-medium text-slate-500 uppercase tracking-wider">Calidad del Aire Actual</p>
                 <div id="gas-level" class="text-7xl md:text-8xl font-extrabold my-4">---</div>
@@ -60,10 +45,7 @@
                 <p class="text-slate-500 mt-4">Última actualización: <span id="last-updated" class="font-semibold">Nunca</span></p>
             </div>
             
-            <!-- Contenedor para el gráfico y la tabla -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                
-                <!-- Gráfico Histórico -->
                 <div class="bg-white rounded-2xl shadow-lg p-6">
                     <h2 class="text-xl font-bold mb-4 text-slate-900">Historial de Contaminación</h2>
                     <div id="chart-container" class="relative h-64">
@@ -71,8 +53,6 @@
                         <canvas id="airQualityChart"></canvas>
                     </div>
                 </div>
-
-                <!-- Tabla de Últimas Mediciones -->
                 <div class="bg-white rounded-2xl shadow-lg p-6">
                     <h2 class="text-xl font-bold mb-4 text-slate-900">Últimas Mediciones</h2>
                     <div class="overflow-auto max-h-72">
@@ -83,57 +63,113 @@
                                     <th class="p-3 text-sm font-semibold text-slate-600">Fecha y Hora</th>
                                 </tr>
                             </thead>
-                            <tbody id="measurements-table">
-                                <!-- Las filas se insertarán aquí con JavaScript -->
-                            </tbody>
+                            <tbody id="measurements-table"></tbody>
                         </table>
                     </div>
                 </div>
             </div>
-
         </main>
         
-        <!-- Pie de página -->
         <footer class="text-center mt-12 text-slate-500">
             <p>Proyecto de Seminario Final - 2025</p>
         </footer>
-
     </div>
 
     <script>
-        // --- CONFIGURACIÓN ---
-        const API_URL = 'https://api-calidad-aire.onrender.com/mediciones';
-        const REFRESH_INTERVAL = 30000; 
+        const API_URL = 'https://api-calidad-aire.onrender.com'; // URL base de la API
+        const REFRESH_INTERVAL = 30000;
+        // ¡IMPORTANTE! Pega aquí la CLAVE PÚBLICA que generaste
+        const VAPID_PUBLIC_KEY = 'BETL8E6Ezotp9Bj0Rjc-21iF1PwQs69QCim8uXK1viAXOfBwPTutTXavFANS39NEDruJrUnQQIJmQdcD8eeGBak';
 
-        // --- REFERENCIAS A ELEMENTOS DEL HTML ---
+        const notificationsBtn = document.getElementById('enable-notifications-btn');
+        let airQualityChart;
+        
+        // --- LÓGICA DE SERVICE WORKER Y PUSH ---
+
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        async function registerServiceWorker() {
+            if ('serviceWorker' in navigator && 'PushManager' in window) {
+                try {
+                    const registration = await navigator.serviceWorker.register('/sw.js');
+                    console.log('Service Worker registrado con éxito:', registration);
+                    
+                    const subscription = await registration.pushManager.getSubscription();
+                    if (subscription === null) {
+                        console.log('No suscrito a notificaciones push.');
+                        notificationsBtn.classList.remove('hidden'); 
+                    } else {
+                        console.log('Ya suscrito:', subscription);
+                        await fetch(`${API_URL}/save-subscription`, {
+                            method: 'POST',
+                            body: JSON.stringify(subscription),
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    }
+                } catch (error) {
+                    console.error('Fallo al registrar el Service Worker:', error);
+                }
+            } else {
+                console.warn('Las notificaciones Push no son soportadas en este navegador.');
+            }
+        }
+
+        async function subscribeUserToPush() {
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                const subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                });
+
+                console.log('Suscripción Push exitosa:', subscription);
+                
+                const response = await fetch(`${API_URL}/save-subscription`, {
+                    method: 'POST',
+                    body: JSON.stringify(subscription),
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.ok) {
+                    console.log('Suscripción guardada en el servidor.');
+                    notificationsBtn.classList.add('hidden'); 
+                } else {
+                    console.error('Fallo al guardar la suscripción en el servidor.');
+                }
+            } catch (error) {
+                console.error('Fallo al suscribirse a las notificaciones Push:', error);
+            }
+        }
+        
+        notificationsBtn.addEventListener('click', subscribeUserToPush);
+        
+        // --- El resto del código se mantiene similar ---
+        
         const statusCard = document.getElementById('status-card');
         const gasLevelEl = document.getElementById('gas-level');
         const airQualityTextEl = document.getElementById('air-quality-text');
         const lastUpdatedEl = document.getElementById('last-updated');
         const tableBody = document.getElementById('measurements-table');
         const chartLoader = document.getElementById('loader');
-        const chartContainer = document.getElementById('chart-container');
-        let airQualityChart; 
 
         async function fetchData() {
-            console.log("Obteniendo datos de la API...");
             try {
-                const response = await fetch(API_URL);
-                if (!response.ok) {
-                    throw new Error(`Error en la API: ${response.statusText}`);
-                }
+                const response = await fetch(`${API_URL}/mediciones`);
+                if (!response.ok) throw new Error(`Error en la API: ${response.statusText}`);
                 const data = await response.json();
-                
-                if (data.length === 0) {
-                    airQualityTextEl.textContent = "Sin Datos";
-                    return;
-                }
-                updateUI(data);
-
+                if (data.length > 0) updateUI(data);
             } catch (error) {
                 console.error("Error al obtener los datos:", error);
                 airQualityTextEl.textContent = "Error de Conexión";
-                statusCard.className = 'bg-slate-300 rounded-2xl shadow-lg p-6 md:p-8 mb-8 text-center transition-all duration-500';
             }
         }
 
@@ -152,17 +188,9 @@
             gasLevelEl.textContent = gasLevel;
             let quality = '';
             let colorClass = '';
-
-            if (gasLevel < 400) {
-                quality = 'BUENA';
-                colorClass = 'bg-green-100 text-green-800';
-            } else if (gasLevel < 700) {
-                quality = 'MODERADA';
-                colorClass = 'bg-yellow-100 text-yellow-800';
-            } else {
-                quality = 'MALA';
-                colorClass = 'bg-red-100 text-red-800';
-            }
+            if (gasLevel < 400) { quality = 'BUENA'; colorClass = 'bg-green-100 text-green-800'; } 
+            else if (gasLevel < 700) { quality = 'MODERADA'; colorClass = 'bg-yellow-100 text-yellow-800'; } 
+            else { quality = 'MALA'; colorClass = 'bg-red-100 text-red-800'; }
             airQualityTextEl.textContent = quality;
             statusCard.className = `${colorClass} rounded-2xl shadow-lg p-6 md:p-8 mb-8 text-center transition-all duration-500`;
         }
@@ -170,110 +198,56 @@
         function updateTable(data) {
             tableBody.innerHTML = '';
             const recentData = data.slice(0, 15);
-
-            recentData.forEach(measurement => {
+            recentData.forEach(m => {
                 const row = document.createElement('tr');
                 row.className = 'border-b border-slate-200 hover:bg-slate-50';
-                const date = new Date(measurement.timestamp);
-                const formattedDate = date.toLocaleString('es-PE', { 
-                    day: '2-digit', 
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                });
-                row.innerHTML = `
-                    <td class="p-3 font-semibold">${measurement.gas_level}</td>
-                    <td class="p-3 text-slate-500">${formattedDate}</td>
-                `;
+                const date = new Date(m.timestamp).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                row.innerHTML = `<td class="p-3 font-semibold">${m.gas_level}</td><td class="p-3 text-slate-500">${date}</td>`;
                 tableBody.appendChild(row);
             });
         }
 
         function updateChart(data) {
             chartLoader.style.display = 'none';
-            chartContainer.style.height = 'auto';
-            
-            const recentData = data.slice(0, 60); // Tomamos los últimos 60 datos para analizar
-            const reversedData = recentData.reverse();
-
-            // --- INICIO DEL CAMBIO ---
-            // Lógica para reiniciar el gráfico después de una pausa larga
+            const recentData = data.slice(0, 60).reverse();
             let startIndex = 0;
-            const GAP_THRESHOLD_MS = 5 * 60 * 1000; // Umbral de 5 minutos
-
-            // Buscamos el índice del ÚLTIMO gran salto en el tiempo.
-            // Queremos mostrar solo los datos que vienen DESPUÉS de ese salto.
-            for (let i = 1; i < reversedData.length; i++) {
-                const currentTime = new Date(reversedData[i].timestamp).getTime();
-                const previousTime = new Date(reversedData[i - 1].timestamp).getTime();
-                const timeDifference = currentTime - previousTime;
-
-                if (timeDifference > GAP_THRESHOLD_MS) {
-                    startIndex = i; // Guardamos el índice donde comienza la nueva sesión de datos
+            const GAP_THRESHOLD_MS = 5 * 60 * 1000;
+            for (let i = 1; i < recentData.length; i++) {
+                if (new Date(recentData[i].timestamp).getTime() - new Date(recentData[i - 1].timestamp).getTime() > GAP_THRESHOLD_MS) {
+                    startIndex = i;
                 }
             }
-
-            // Creamos un nuevo array solo con los datos de la última sesión continua.
-            const finalData = reversedData.slice(startIndex);
-            // --- FIN DEL CAMBIO ---
-
+            const finalData = recentData.slice(startIndex);
             const chartLabels = finalData.map(d => new Date(d.timestamp));
             const chartValues = finalData.map(d => d.gas_level);
-            
             const chartData = {
                 labels: chartLabels,
                 datasets: [{
-                    label: 'Nivel de Gas',
-                    data: chartValues,
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    fill: true,
-                    tension: 0.4, 
-                    //pointRadius: 0
+                    label: 'Nivel de Gas', data: chartValues, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true, tension: 0.4, pointRadius: 0
                 }]
             };
-
             if (airQualityChart) {
                 airQualityChart.data = chartData;
                 airQualityChart.update();
             } else {
                 const ctx = document.getElementById('airQualityChart').getContext('2d');
                 airQualityChart = new Chart(ctx, {
-                    type: 'line',
-                    data: chartData,
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            x: {
-                                type: 'time',
-                                time: {
-                                    unit: 'minute',
-                                    tooltipFormat: 'PPpp',
-                                    displayFormats: { minute: 'h:mm a' }
-                                },
-                                title: { display: true, text: 'Hora' }
-                            },
-                            y: {
-                                beginAtZero: false,
-                                title: { display: true, text: 'Nivel de Gas' }
-                            }
-                        },
-                        plugins: {
-                            legend: { display: false }
-                        }
+                    type: 'line', data: chartData, options: {
+                        responsive: true, maintainAspectRatio: false, scales: {
+                            x: { type: 'time', time: { unit: 'minute', tooltipFormat: 'PPpp', displayFormats: { minute: 'h:mm a' } }, title: { display: true, text: 'Hora' } },
+                            y: { beginAtZero: false, title: { display: true, text: 'Nivel de Gas' } }
+                        }, plugins: { legend: { display: false } }
                     }
                 });
             }
         }
         
-        // --- INICIO DE LA APLICACIÓN ---
-        fetchData();
-        setInterval(fetchData, REFRESH_INTERVAL);
-
+        document.addEventListener('DOMContentLoaded', () => {
+            registerServiceWorker();
+            fetchData();
+            setInterval(fetchData, REFRESH_INTERVAL);
+        });
     </script>
-
 </body>
 </html>
