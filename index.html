@@ -106,7 +106,7 @@
                     if (subscription === null) {
                         console.log('No suscrito a notificaciones push.');
                         notificationsBtn.classList.remove('hidden');
-                        textQuestion.classList.remove('hidden')
+                        textQuestion.classList.remove('hidden');
                     } else {
                         console.log('Ya suscrito:', subscription);
                         await fetch(`${API_URL}/save-subscription`, {
@@ -138,7 +138,8 @@
                 });
                 if (response.ok) {
                     console.log('Suscripción guardada en el servidor.');
-                    document.getElementById('notifications-container').classList.add('hidden');
+                    notificationsBtn.classList.add('hidden');
+                    textQuestion.classList.add('hidden');
                 } else {
                     console.error('Fallo al guardar la suscripción en el servidor.');
                 }
