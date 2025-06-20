@@ -1,11 +1,10 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monitor de Calidad del Aire - Paucarpata</title>
-
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
@@ -13,59 +12,37 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
-
+    
     <link rel="manifest" href="/manifest.json">
 
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f0f4f8;
-        }
-
-        .loader {
-            border-top-color: #3498db;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #f0f4f8; }
+        .loader { border-top-color: #3498db; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-
 <body class="bg-slate-100 text-slate-800">
 
     <div class="container mx-auto p-4 md:p-8 max-w-4xl">
 
         <header class="text-center mb-8">
             <h1 class="text-4xl md:text-5xl font-extrabold text-slate-900">Monitor de Calidad del Aire</h1>
-            <p class="text-lg text-slate-600 mt-2">Paucarpata, Arequipa - Dispositivo: <span id="deviceId"
-                    class="font-semibold">MONITOR-SEMINARIO</span></p>
+            <p class="text-lg text-slate-600 mt-2">Paucarpata, Arequipa - Dispositivo: <span id="deviceId" class="font-semibold">MONITOR-SEMINARIO</span></p>
         </header>
 
         <main>
-            <div id="status-card"
-                class="bg-white rounded-2xl shadow-lg p-6 md:p-8 mb-8 text-center transition-all duration-500">
+            <div id="status-card" class="bg-white rounded-2xl shadow-lg p-6 md:p-8 mb-8 text-center transition-all duration-500">
                 <p class="text-sm font-medium text-slate-500 uppercase tracking-wider">Calidad del Aire Actual</p>
                 <div id="gas-level" class="text-7xl md:text-8xl font-extrabold my-4">---</div>
                 <div id="air-quality-text" class="text-2xl font-bold uppercase tracking-widest">Cargando...</div>
-                <p class="text-slate-500 mt-4">Última actualización: <span id="last-updated"
-                        class="font-semibold">Nunca</span></p>
+                <p class="text-slate-500 mt-4">Última actualización: <span id="last-updated" class="font-semibold">Nunca</span></p>
             </div>
-
+            
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div class="bg-white rounded-2xl shadow-lg p-6">
                     <h2 class="text-xl font-bold mb-4 text-slate-900">Historial de Contaminación</h2>
                     <div id="chart-container" class="relative h-64">
-                        <div id="loader"
-                            class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-32 w-32 absolute top-1/2 left-1/2 -mt-16 -ml-16">
-                        </div>
+                         <div id="loader" class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-32 w-32 absolute top-1/2 left-1/2 -mt-16 -ml-16"></div>
                         <canvas id="airQualityChart"></canvas>
                     </div>
                 </div>
@@ -87,14 +64,13 @@
 
             <div id="notifications-container" class="flex flex-col items-center mt-8">
                 <p class="text-slate-600 mb-4">¿Quieres recibir alertas cuando la calidad del aire sea mala?</p>
-                <button id="enable-notifications-btn"
-                    class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all hidden">
-                    Activar Notificaciones Push
+                <button id="enable-notifications-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all hidden">
+                Activar Notificaciones Push
                 </button>
             </div>
 
         </main>
-
+        
         <footer class="text-center mt-12 text-slate-500">
             <p>Proyecto de Seminario en Tecnología I - 2025</p>
         </footer>
@@ -107,7 +83,7 @@
 
         const notificationsBtn = document.getElementById('enable-notifications-btn');
         let airQualityChart;
-
+        
         function urlBase64ToUint8Array(base64String) {
             const padding = '='.repeat((4 - base64String.length % 4) % 4);
             const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -120,18 +96,15 @@
         }
 
         async function registerServiceWorker() {
-            const container = document.getElementById('notifications-container');
-
             if ('serviceWorker' in navigator && 'PushManager' in window) {
                 try {
                     const registration = await navigator.serviceWorker.register('/sw.js');
                     console.log('Service Worker registrado con éxito:', registration);
-
+                    
                     const subscription = await registration.pushManager.getSubscription();
-
                     if (subscription === null) {
                         console.log('No suscrito a notificaciones push.');
-                        container.classList.remove('hidden');
+                        document.getElementById('notifications-container').classList.remove('hidden');
                     } else {
                         console.log('Ya suscrito:', subscription);
                         await fetch(`${API_URL}/save-subscription`, {
@@ -139,9 +112,7 @@
                             body: JSON.stringify(subscription),
                             headers: { 'Content-Type': 'application/json' }
                         });
-                        container.classList.add('hidden');
                     }
-
                 } catch (error) {
                     console.error('Fallo al registrar el Service Worker:', error);
                 }
@@ -173,9 +144,9 @@
                 console.error('Fallo al suscribirse a las notificaciones Push:', error);
             }
         }
-
+        
         notificationsBtn.addEventListener('click', subscribeUserToPush);
-
+        
         const statusCard = document.getElementById('status-card');
         const gasLevelEl = document.getElementById('gas-level');
         const airQualityTextEl = document.getElementById('air-quality-text');
@@ -202,16 +173,16 @@
             updateChart(data);
             lastUpdatedEl.textContent = new Date().toLocaleTimeString('es-PE');
             if (latestMeasurement.deviceId) {
-                document.getElementById('deviceId').textContent = latestMeasurement.deviceId;
+                 document.getElementById('deviceId').textContent = latestMeasurement.deviceId;
             }
         }
-
+        
         function updateStatusCard(gasLevel) {
             gasLevelEl.textContent = gasLevel;
             let quality = '';
             let colorClass = '';
-            if (gasLevel < 400) { quality = 'BUENA'; colorClass = 'bg-green-100 text-green-800'; }
-            else if (gasLevel < 700) { quality = 'MODERADA'; colorClass = 'bg-yellow-100 text-yellow-800'; }
+            if (gasLevel < 400) { quality = 'BUENA'; colorClass = 'bg-green-100 text-green-800'; } 
+            else if (gasLevel < 700) { quality = 'MODERADA'; colorClass = 'bg-yellow-100 text-yellow-800'; } 
             else { quality = 'MALA'; colorClass = 'bg-red-100 text-red-800'; }
             airQualityTextEl.textContent = quality;
             statusCard.className = `${colorClass} rounded-2xl shadow-lg p-6 md:p-8 mb-8 text-center transition-all duration-500`;
@@ -264,7 +235,7 @@
                 });
             }
         }
-
+        
         document.addEventListener('DOMContentLoaded', () => {
             registerServiceWorker();
             fetchData();
@@ -272,5 +243,4 @@
         });
     </script>
 </body>
-
 </html>
