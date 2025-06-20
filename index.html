@@ -13,7 +13,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
     
-    <!-- ¡NUEVO! Añadimos un manifest para la PWA -->
     <link rel="manifest" href="/manifest.json">
 
     <style>
@@ -28,16 +27,10 @@
 
         <header class="text-center mb-8">
             <h1 class="text-4xl md:text-5xl font-extrabold text-slate-900">Monitor de Calidad del Aire</h1>
-            <p class="text-lg text-slate-600 mt-2">Paucarpata, Arequipa - Dispositivo: <span id="deviceId" class="font-semibold">PAUCARPATA-001</span></p>
+            <p class="text-lg text-slate-600 mt-2">Paucarpata, Arequipa - Dispositivo: <span id="deviceId" class="font-semibold">MONITOR-SEMINARIO</span></p>
         </header>
 
         <main>
-            <div class="flex justify-center mb-4">
-                <button id="enable-notifications-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all hidden">
-                    Activar Notificaciones Push
-                </button>
-            </div>
-
             <div id="status-card" class="bg-white rounded-2xl shadow-lg p-6 md:p-8 mb-8 text-center transition-all duration-500">
                 <p class="text-sm font-medium text-slate-500 uppercase tracking-wider">Calidad del Aire Actual</p>
                 <div id="gas-level" class="text-7xl md:text-8xl font-extrabold my-4">---</div>
@@ -68,24 +61,28 @@
                     </div>
                 </div>
             </div>
+
+            <div class="flex flex-col items-center mt-8">
+            <p class="text-slate-600 mb-4">¿Quieres recibir alertas cuando la calidad del aire sea mala?</p>
+            <button id="enable-notifications-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all hidden">
+                Activar Notificaciones Push
+            </button>
+            </div>
         </main>
         
         <footer class="text-center mt-12 text-slate-500">
-            <p>Proyecto de Seminario Final - 2025</p>
+            <p>Proyecto de Seminario en Tecnología - 2025</p>
         </footer>
     </div>
 
     <script>
-        const API_URL = 'https://api-calidad-aire.onrender.com'; // URL base de la API
+        const API_URL = 'https://api-calidad-aire.onrender.com';
         const REFRESH_INTERVAL = 30000;
-        // CLAVE PÚBLICA 
         const VAPID_PUBLIC_KEY = 'BETL8E6Ezotp9Bj0Rjc-21iF1PwQs69QCim8uXK1viAXOfBwPTutTXavFANS39NEDruJrUnQQIJmQdcD8eeGBak';
 
         const notificationsBtn = document.getElementById('enable-notifications-btn');
         let airQualityChart;
         
-        // --- LÓGICA DE SERVICE WORKER Y PUSH ---
-
         function urlBase64ToUint8Array(base64String) {
             const padding = '='.repeat((4 - base64String.length % 4) % 4);
             const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -130,15 +127,12 @@
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
                 });
-
                 console.log('Suscripción Push exitosa:', subscription);
-                
                 const response = await fetch(`${API_URL}/save-subscription`, {
                     method: 'POST',
                     body: JSON.stringify(subscription),
                     headers: { 'Content-Type': 'application/json' }
                 });
-
                 if (response.ok) {
                     console.log('Suscripción guardada en el servidor.');
                     notificationsBtn.classList.add('hidden'); 
@@ -151,8 +145,6 @@
         }
         
         notificationsBtn.addEventListener('click', subscribeUserToPush);
-        
-        // --- El resto del código se mantiene similar ---
         
         const statusCard = document.getElementById('status-card');
         const gasLevelEl = document.getElementById('gas-level');

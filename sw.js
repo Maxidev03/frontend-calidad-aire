@@ -16,8 +16,8 @@ self.addEventListener('push', function(event) {
   const title = data.title || 'Alerta de Calidad del Aire';
   const options = {
     body: data.body || 'Se ha detectado un cambio importante.',
-    icon: data.icon || 'images/icon.png', // Un ícono por defecto
-    badge: data.badge || 'images/badge.png' // Un ícono para la barra de notificaciones (móvil)
+    icon: data.icon || 'images/icon.png',
+    badge: data.badge || 'images/badge.png'
   };
 
   // Le decimos al navegador que espere hasta que la notificación se haya mostrado.
